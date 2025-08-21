@@ -93,8 +93,9 @@ def schedule_email_once(send_time, file_bytes, file_name, pasted_text, email_to)
     target = datetime.combine(now.date(), target_time)
 
     # ✅ Only shift to tomorrow if target already passed
-    if target <= now:
+    if target < now:
         target += timedelta(days=1)
+
 
     delay = (target - now).total_seconds()
 
