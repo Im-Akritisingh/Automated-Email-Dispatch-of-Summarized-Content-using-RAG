@@ -22,11 +22,6 @@ if "EMAIL_USER" in st.secrets:  # On Streamlit Cloud
     EMAIL_ADDRESS = st.secrets["EMAIL_USER"]
     EMAIL_PASSWORD = st.secrets["EMAIL_PASS"]
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-else:  # Local machine
-    load_dotenv()
-    EMAIL_ADDRESS = os.getenv("EMAIL_USER")
-    EMAIL_PASSWORD = os.getenv("EMAIL_PASS")
-    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 st.set_page_config(page_title="Smart Email Summarizer", layout="centered")
 st.title("📩 Auto Email Summarizer")
