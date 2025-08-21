@@ -13,8 +13,8 @@ from langchain.chains import RetrievalQA
 import smtplib
 from email.mime.text import MIMEText
 import os
-
 os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
+
 
 # Load environment variables
 load_dotenv()
@@ -29,37 +29,25 @@ st.title("📩 Auto Email Summarizer")
 st.sidebar.header("📨 Email Settings")
 user_email = st.sidebar.text_input("Receiver Email", value="example@gmail.com")
 
-# 🟢 Manual time input instead of dropdown
-send_time_str = st.sidebar.text_input(
-    "⏰ Send Summary At (HH:MM)", value=datetime.now().strftime("%H:%M")
-)
-
-# Convert safely to datetime.time
-try:
-    send_time = datetime.strptime(send_time_str, "%H:%M").time()
-except ValueError:
-    st.sidebar.error("❌ Please enter time in HH:MM format (e.g., 14:05)")
-    send_time = datetime.now().time()  # fallback
+# ✅ User types exact time (HH:MM)
+send_time = st.sidebar.text_input("⏰ Send Summary At (HH:MM)", value="12:00")
 
 # Upload section
 st.subheader("📄 Upload a file or paste text")
 uploaded_file = st.file_uploader("Upload PDF or TXT file", type=["pdf", "txt"])
 text_input = st.text_area("Or paste your content here")
 
-
 def summarize_and_send(file_bytes, file_name, pasted_text, email_to):
     try:
         # Write to temp file
         if file_bytes:
-            suffix = file_name.split(".")[-1]
+            suffix = file_name.split('.')[-1]
             with tempfile.NamedTemporaryFile(delete=False, suffix=f".{suffix}") as tmp:
                 tmp.write(file_bytes)
                 tmp_path = tmp.name
             loader = PyPDFLoader(tmp_path) if suffix == "pdf" else TextLoader(tmp_path)
         elif pasted_text.strip():
-            with tempfile.NamedTemporaryFile(
-                delete=False, suffix=".txt", mode="w", encoding="utf-8"
-            ) as tmp:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".txt", mode="w", encoding="utf-8") as tmp:
                 tmp.write(pasted_text)
                 tmp_path = tmp.name
             loader = TextLoader(tmp_path)
@@ -70,19 +58,16 @@ def summarize_and_send(file_bytes, file_name, pasted_text, email_to):
         docs = loader.load()
         splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
         chunks = splitter.split_documents(docs)
-        embedding = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
-        )
+        embedding = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
         vectorstore = Chroma.from_documents(chunks, embedding)
 
         llm = ChatGroq(api_key=GROQ_API_KEY, model_name="llama3-70b-8192")
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=llm, retriever=vectorstore.as_retriever()
-        )
+        qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=vectorstore.as_retriever())
         response = qa_chain.invoke("Summarize this document for email update.")
         summary = response["result"] if isinstance(response, dict) else str(response)
 
         msg = MIMEText(summary)
+
         msg["Subject"] = "Summary Update"
         msg["From"] = EMAIL_ADDRESS
         msg["To"] = email_to
@@ -96,20 +81,30 @@ def summarize_and_send(file_bytes, file_name, pasted_text, email_to):
         print(f" Email failed: {e}")
 
 
-def schedule_email_once(file_bytes, file_name, pasted_text, email_to):
+# ✅ Updated scheduling function
+def schedule_email_once(send_time, file_bytes, file_name, pasted_text, email_to):
     now = datetime.now()
-    target = datetime.combine(now.date(), send_time)
-    if target < now:
+    try:
+        target_time = datetime.strptime(send_time, "%H:%M").time()
+    except ValueError:
+        st.error("❌ Invalid time format! Please use HH:MM (24-hour).")
+        return
+
+    target = datetime.combine(now.date(), target_time)
+
+    # ✅ Only shift to tomorrow if target already passed
+    if target <= now:
         target += timedelta(days=1)
+
     delay = (target - now).total_seconds()
 
     def run_task():
-        print(f" Waiting {int(delay)} seconds...")
         threading.Event().wait(delay)
         summarize_and_send(file_bytes, file_name, pasted_text, email_to)
 
     threading.Thread(target=run_task, daemon=True).start()
-    st.info(f" Email scheduled in {int(delay // 60)} min {int(delay % 60)} sec")
+    st.info(f"⏳ Email scheduled in {int(delay // 60)} min {int(delay % 60)} sec")
+    st.success(f"📧 Email will be sent at {send_time} to {email_to}")
 
 
 # Trigger
@@ -118,11 +113,10 @@ if st.button(" Schedule Email"):
         st.warning("Please upload a file or paste content.")
     elif not user_email:
         st.warning("Please enter a valid email.")
+    elif not send_time.strip():
+        st.warning("Please enter a valid time in HH:MM format.")
     else:
         file_bytes = uploaded_file.read() if uploaded_file else None
         file_name = uploaded_file.name if uploaded_file else None
         pasted_text = text_input
-        schedule_email_once(file_bytes, file_name, pasted_text, user_email)
-        st.success(
-            f" Email will be sent at {send_time.strftime('%H:%M')} to {user_email}"
-        )
+        schedule_email_once(send_time, file_bytes, file_name, pasted_text, user_email)
