@@ -9,4 +9,3 @@ chromadb
 PyPDF2
 smtplib
 email
-faiss-cpu
