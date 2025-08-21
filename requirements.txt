@@ -1,9 +1,12 @@
 streamlit
 python-dotenv
+pytz
 langchain
 langchain-community
 langchain-groq
-chromadb
 sentence-transformers
-torch
-pypdf
+chromadb
+PyPDF2
+smtplib
+email
+faiss-cpu
