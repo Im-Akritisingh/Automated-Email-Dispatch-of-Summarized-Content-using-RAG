@@ -29,7 +29,14 @@ st.title("📩 Auto Email Summarizer")
 # Sidebar inputs
 st.sidebar.header("📨 Email Settings")
 user_email = st.sidebar.text_input("Receiver Email", value="example@gmail.com")
-send_time = st.sidebar.time_input("⏰ Send Summary At")
+
+# ✅ Replace slider with manual input
+time_str = st.sidebar.text_input("⏰ Send Summary At (e.g., 01:30 PM)", "01:00 PM")
+try:
+    send_time = datetime.strptime(time_str.strip(), "%I:%M %p").time()
+except ValueError:
+    st.sidebar.error("⚠️ Please enter time in HH:MM AM/PM format (e.g., 09:15 AM)")
+    send_time = None
 
 # Upload section
 st.subheader("📄 Upload a file or paste text")
@@ -104,9 +111,11 @@ if st.button(" Schedule Email"):
         st.warning("Please upload a file or paste content.")
     elif not user_email:
         st.warning("Please enter a valid email.")
+    elif not send_time:
+        st.warning("Please enter a valid time (HH:MM AM/PM).")
     else:
         file_bytes = uploaded_file.read() if uploaded_file else None
         file_name = uploaded_file.name if uploaded_file else None
         pasted_text = text_input
         schedule_email_once(file_bytes, file_name, pasted_text, user_email)
-        st.success(f" Email will be sent at {send_time.strftime('%H:%M')} IST to {user_email}")
+        st.success(f" Email will be sent at {send_time.strftime('%I:%M %p')} IST to {user_email}")
