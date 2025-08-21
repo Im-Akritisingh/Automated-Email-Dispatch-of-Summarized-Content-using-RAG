@@ -1,11 +1,10 @@
 import streamlit as st
 import smtplib, ssl
 import tempfile
-from datetime import datetime
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS   # ✅ switched to FAISS
+from langchain_community.vectorstores import DocArrayInMemorySearch   # ✅ lightweight, no install needed
 from langchain_groq import ChatGroq
 from langchain.chains import RetrievalQA
 from email.mime.text import MIMEText
@@ -58,8 +57,8 @@ def summarize_and_send(file_bytes, file_name, pasted_text, email_to):
         chunks = splitter.split_documents(docs)
         embedding = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-        # ✅ Using FAISS instead of Chroma
-        vectorstore = FAISS.from_documents(chunks, embedding)
+        # ✅ Using DocArrayInMemorySearch (no dependency issues)
+        vectorstore = DocArrayInMemorySearch.from_documents(chunks, embedding)
 
         llm = ChatGroq(api_key=GROQ_API_KEY, model_name="llama3-70b-8192")
         qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=vectorstore.as_retriever())
