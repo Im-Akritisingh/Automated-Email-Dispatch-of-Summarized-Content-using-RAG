@@ -4,7 +4,7 @@ import os
 import tempfile
 from datetime import datetime, timedelta, time
 import threading
-import pytz   # ✅ Added
+import pytz
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -17,7 +17,7 @@ import os
 os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 
 
-# ✅ Load environment variables (safe version)
+# ✅ Safe secrets loading
 EMAIL_ADDRESS = st.secrets.get("EMAIL_USER", "")
 EMAIL_PASSWORD = st.secrets.get("EMAIL_PASS", "")
 GROQ_API_KEY = st.secrets.get("GROQ_API_KEY", "")
@@ -41,6 +41,7 @@ except ValueError:
 st.subheader("📄 Upload a file or paste text")
 uploaded_file = st.file_uploader("Upload PDF or TXT file", type=["pdf", "txt"])
 text_input = st.text_area("Or paste your content here")
+
 
 def summarize_and_send(file_bytes, file_name, pasted_text, email_to):
     try:
@@ -91,11 +92,12 @@ def summarize_and_send(file_bytes, file_name, pasted_text, email_to):
     except Exception as e:
         st.error(f"❌ Email failed: {e}")
 
+
 def schedule_email_once(file_bytes, file_name, pasted_text, email_to):
     ist = pytz.timezone("Asia/Kolkata")  # ✅ Force IST timezone
     now = datetime.now(ist)
     target = datetime.combine(now.date(), send_time)
-    target = ist.localize(target)  # ✅ Localize target to IST
+    target = ist.localize(target)
 
     if target < now:
         target += timedelta(days=1)
@@ -108,7 +110,12 @@ def schedule_email_once(file_bytes, file_name, pasted_text, email_to):
         summarize_and_send(file_bytes, file_name, pasted_text, email_to)
 
     threading.Thread(target=run_task, daemon=True).start()
-    st.info(f"📩 Email scheduled for {send_time.strftime('%I:%M %p')} IST to {email_to}")
+
+    st.info(
+        f"📩 Email scheduled in {int(delay // 60)} min {int(delay % 60)} sec "
+        f"(⏰ {send_time.strftime('%I:%M %p')} IST) to {email_to}"
+    )
+
 
 # Trigger
 if st.button(" Schedule Email"):
