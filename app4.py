@@ -1,58 +1,42 @@
 import streamlit as st
-from dotenv import load_dotenv
-import os
+import smtplib, ssl
 import tempfile
-from datetime import datetime, timedelta, time
-import threading
-import pytz
+from datetime import datetime
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_groq import ChatGroq
 from langchain.chains import RetrievalQA
-import smtplib
 from email.mime.text import MIMEText
 import os
+
 os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 
-
-# ✅ Safe secrets loading
-EMAIL_ADDRESS = st.secrets.get("EMAIL_USER", "")
-EMAIL_PASSWORD = st.secrets.get("EMAIL_PASS", "")
-GROQ_API_KEY = st.secrets.get("GROQ_API_KEY", "")
+# ✅ Load secrets safely
+try:
+    EMAIL_ADDRESS = st.secrets["EMAIL_USER"]
+    EMAIL_PASSWORD = st.secrets["EMAIL_PASS"]
+    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+except Exception as e:
+    st.error(f"❌ Failed to load secrets: {e}")
+    st.stop()
 
 st.set_page_config(page_title="Smart Email Summarizer", layout="centered")
-st.title("📩 Auto Email Summarizer")
+st.title("📩 Auto Email Summarizer (Instant Send)")
 
 # Sidebar inputs
 st.sidebar.header("📨 Email Settings")
 user_email = st.sidebar.text_input("Receiver Email", value="example@gmail.com")
-
-# ✅ Manual time input instead of slider
-time_str = st.sidebar.text_input("⏰ Send Summary At (e.g., 01:30 PM)", "01:00 PM")
-try:
-    send_time = datetime.strptime(time_str.strip(), "%I:%M %p").time()
-except ValueError:
-    st.sidebar.error("⚠️ Please enter time in HH:MM AM/PM format (e.g., 09:15 AM)")
-    send_time = None
 
 # Upload section
 st.subheader("📄 Upload a file or paste text")
 uploaded_file = st.file_uploader("Upload PDF or TXT file", type=["pdf", "txt"])
 text_input = st.text_area("Or paste your content here")
 
-
 def summarize_and_send(file_bytes, file_name, pasted_text, email_to):
     try:
-        if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
-            st.error("❌ Email credentials are missing. Please add EMAIL_USER and EMAIL_PASS in Streamlit secrets.")
-            return
-        if not GROQ_API_KEY:
-            st.error("❌ GROQ_API_KEY is missing in Streamlit secrets.")
-            return
-
-        # Write to temp file
+        # Handle input
         if file_bytes:
             suffix = file_name.split('.')[-1]
             with tempfile.NamedTemporaryFile(delete=False, suffix=f".{suffix}") as tmp:
@@ -68,6 +52,7 @@ def summarize_and_send(file_bytes, file_name, pasted_text, email_to):
             st.error("⚠️ No content to summarize.")
             return
 
+        # Process
         docs = loader.load()
         splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
         chunks = splitter.split_documents(docs)
@@ -79,55 +64,31 @@ def summarize_and_send(file_bytes, file_name, pasted_text, email_to):
         response = qa_chain.invoke("Summarize this document for email update.")
         summary = response["result"] if isinstance(response, dict) else str(response)
 
+        # Send email
         msg = MIMEText(summary)
         msg["Subject"] = "Summary Update"
         msg["From"] = EMAIL_ADDRESS
         msg["To"] = email_to
 
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
             server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
             server.send_message(msg)
 
         st.success(f"✅ Email sent successfully to {email_to}")
+        st.text_area("📌 Summary Sent:", summary, height=200)
+
     except Exception as e:
         st.error(f"❌ Email failed: {e}")
 
-
-def schedule_email_once(file_bytes, file_name, pasted_text, email_to):
-    ist = pytz.timezone("Asia/Kolkata")  # ✅ Force IST timezone
-    now = datetime.now(ist)
-    target = datetime.combine(now.date(), send_time)
-    target = ist.localize(target)
-
-    if target < now:
-        target += timedelta(days=1)
-
-    delay = (target - now).total_seconds()
-
-    def run_task():
-        st.info(f"⏳ Waiting {int(delay // 60)} min {int(delay % 60)} sec before sending...")
-        threading.Event().wait(delay)
-        summarize_and_send(file_bytes, file_name, pasted_text, email_to)
-
-    threading.Thread(target=run_task, daemon=True).start()
-
-    st.info(
-        f"📩 Email scheduled in {int(delay // 60)} min {int(delay % 60)} sec "
-        f"(⏰ {send_time.strftime('%I:%M %p')} IST) to {email_to}"
-    )
-
-
 # Trigger
-if st.button(" Schedule Email"):
+if st.button("📤 Send Email Now"):
     if not (uploaded_file or text_input.strip()):
-        st.warning("Please upload a file or paste content.")
+        st.warning("⚠️ Please upload a file or paste content.")
     elif not user_email:
-        st.warning("Please enter a valid email.")
-    elif not send_time:
-        st.warning("Please enter a valid time (HH:MM AM/PM).")
+        st.warning("⚠️ Please enter a valid email.")
     else:
         file_bytes = uploaded_file.read() if uploaded_file else None
         file_name = uploaded_file.name if uploaded_file else None
         pasted_text = text_input
-        schedule_email_once(file_bytes, file_name, pasted_text, user_email)
-        st.success(f" Email will be sent at {send_time.strftime('%I:%M %p')} IST to {user_email}")
+        summarize_and_send(file_bytes, file_name, pasted_text, user_email)
