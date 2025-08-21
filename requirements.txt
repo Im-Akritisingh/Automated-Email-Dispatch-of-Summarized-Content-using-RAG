@@ -5,3 +5,4 @@ langchain-groq
 sentence-transformers
 huggingface-hub
 pypdf
+docarray
