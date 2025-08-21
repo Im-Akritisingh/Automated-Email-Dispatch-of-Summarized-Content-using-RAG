@@ -17,11 +17,10 @@ import os
 os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 
 
-# ✅ Load environment variables (works locally + Streamlit Cloud)
-if "EMAIL_USER" in st.secrets:  # On Streamlit Cloud
-    EMAIL_ADDRESS = st.secrets["EMAIL_USER"]
-    EMAIL_PASSWORD = st.secrets["EMAIL_PASS"]
-    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+# ✅ Load environment variables (safe version)
+EMAIL_ADDRESS = st.secrets.get("EMAIL_USER", "")
+EMAIL_PASSWORD = st.secrets.get("EMAIL_PASS", "")
+GROQ_API_KEY = st.secrets.get("GROQ_API_KEY", "")
 
 st.set_page_config(page_title="Smart Email Summarizer", layout="centered")
 st.title("📩 Auto Email Summarizer")
@@ -45,6 +44,13 @@ text_input = st.text_area("Or paste your content here")
 
 def summarize_and_send(file_bytes, file_name, pasted_text, email_to):
     try:
+        if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
+            st.error("❌ Email credentials are missing. Please add EMAIL_USER and EMAIL_PASS in Streamlit secrets.")
+            return
+        if not GROQ_API_KEY:
+            st.error("❌ GROQ_API_KEY is missing in Streamlit secrets.")
+            return
+
         # Write to temp file
         if file_bytes:
             suffix = file_name.split('.')[-1]
