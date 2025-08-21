@@ -28,14 +28,13 @@ st.title("📩 Auto Email Summarizer")
 # Sidebar inputs
 st.sidebar.header("📨 Email Settings")
 user_email = st.sidebar.text_input("Receiver Email", value="example@gmail.com")
-
-# ✅ User types exact time (HH:MM)
-send_time = st.sidebar.text_input("⏰ Send Summary At (HH:MM)", value="12:00")
+send_time_str = st.sidebar.text_input("⏰ Send Summary At (e.g. 12:30 PM)")
 
 # Upload section
 st.subheader("📄 Upload a file or paste text")
 uploaded_file = st.file_uploader("Upload PDF or TXT file", type=["pdf", "txt"])
 text_input = st.text_area("Or paste your content here")
+
 
 def summarize_and_send(file_bytes, file_name, pasted_text, email_to):
     try:
@@ -81,31 +80,30 @@ def summarize_and_send(file_bytes, file_name, pasted_text, email_to):
         print(f" Email failed: {e}")
 
 
-# ✅ Updated scheduling function
-def schedule_email_once(send_time, file_bytes, file_name, pasted_text, email_to):
+def schedule_email_once(file_bytes, file_name, pasted_text, email_to, send_time_str):
     now = datetime.now()
+
+    # ✅ Parse AM/PM format
     try:
-        target_time = datetime.strptime(send_time, "%H:%M").time()
+        target_time = datetime.strptime(send_time_str.strip(), "%I:%M %p").time()
     except ValueError:
-        st.error("❌ Invalid time format! Please use HH:MM (24-hour).")
+        st.error("⚠️ Please enter time in format like 12:30 PM or 08:15 AM")
         return
 
     target = datetime.combine(now.date(), target_time)
-
-    # ✅ Only shift to tomorrow if target already passed
-    if target < now:
+    if target <= now:
         target += timedelta(days=1)
-
 
     delay = (target - now).total_seconds()
 
     def run_task():
+        print(f" Waiting {int(delay)} seconds...")
         threading.Event().wait(delay)
         summarize_and_send(file_bytes, file_name, pasted_text, email_to)
 
     threading.Thread(target=run_task, daemon=True).start()
     st.info(f"⏳ Email scheduled in {int(delay // 60)} min {int(delay % 60)} sec")
-    st.success(f"📧 Email will be sent at {send_time} to {email_to}")
+    st.success(f"📧 Email will be sent at {target.strftime('%I:%M %p')} to {email_to}")
 
 
 # Trigger
@@ -114,10 +112,10 @@ if st.button(" Schedule Email"):
         st.warning("Please upload a file or paste content.")
     elif not user_email:
         st.warning("Please enter a valid email.")
-    elif not send_time.strip():
-        st.warning("Please enter a valid time in HH:MM format.")
+    elif not send_time_str.strip():
+        st.warning("Please enter a valid time (e.g., 12:30 PM)")
     else:
         file_bytes = uploaded_file.read() if uploaded_file else None
         file_name = uploaded_file.name if uploaded_file else None
         pasted_text = text_input
-        schedule_email_once(send_time, file_bytes, file_name, pasted_text, user_email)
+        schedule_email_once(file_bytes, file_name, pasted_text, user_email, send_time_str)
