@@ -1,11 +1,7 @@
 streamlit
-python-dotenv
-pytz
 langchain
 langchain-community
 langchain-groq
 sentence-transformers
-chromadb
-PyPDF2
-smtplib
-email
+huggingface-hub
+pypdf
